@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-BATCH_SIZE = 32
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
 
@@ -17,7 +16,7 @@ VAL_DIR= 'database/val'
 TEST_DIR= 'database/test'
 
 def create_dataset():
-    categories = ['cellphone', 'pencil']
+    categories = ['palm', 'fist']
 
     for category in categories:
         img_dir = os.path.join(PATH_TO_DATA, category)
@@ -46,29 +45,31 @@ def fetch_data():
 	    shear_range=0.2,
 	    zoom_range=0.2,
 	    horizontal_flip=True,
-	    fill_mode='nearest'
+	    fill_mode='nearest',
+        brightness_range=[0.8, 1.2],
+        channel_shift_range=0.2
 	)
-	
+
     val_datagen = ImageDataGenerator(rescale=1./255)
     test_datagen = ImageDataGenerator(rescale=1./255)
 
     train_generator = train_datagen.flow_from_directory(
 	    TRAIN_DIR,
-	    target_size=(244, 244),
+	    target_size=(224, 224),
 	    batch_size=32,
 	    class_mode='binary'
 	)
 	
     val_generator = val_datagen.flow_from_directory(
 	    VAL_DIR,
-	    target_size=(244, 244),
+	    target_size=(224, 224),
 	    batch_size=32,
 	    class_mode='binary'
 	)
 
     test_generator = test_datagen.flow_from_directory(
             TEST_DIR,
-            target_size=(244, 244),
+            target_size=(224, 224),
             batch_size=32,
             class_mode='binary'
     )
@@ -78,22 +79,23 @@ def fetch_data():
 def build_model():
 
     model = models.Sequential([
-        layers.Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-        layers.Conv2D(16, (3,3), padding='same', activation='relu'),
-        layers.MaxPooling2D((2,2)),
-        layers.Conv2D(32, (3,3), padding='same', activation='relu'),
-        layers.MaxPooling2D((2,2)),
-        layers.Conv2D(64,(3,3), padding='same', activation='relu'),
-        layers.MaxPooling2D((2,2)),
-        layers.Conv2D(64, (3,3), padding='same', activation='relu'),
-        layers.MaxPooling2D((2,2)),
+        layers.Rescaling(1./255, input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
+        layers.Conv2D(32, 3, padding='same', activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(64, 3, padding='same', activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(128,3, padding='same', activation='relu'),
+        layers.MaxPooling2D(),
+        layers.Conv2D(256, 3, padding='same', activation='relu'),
+        layers.MaxPooling2D(),
         layers.Flatten(),
-        layers.Dense(128, activation='relu'),
+        layers.Dense(256, activation='relu'),
+        layers.Dropout(0.5),
         layers.Dense(1, activation='sigmoid')
     ])
 
     model.compile(optimizer='adam',
-                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
+                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
                   metrics=['accuracy'])
 
     model.summary()
@@ -107,7 +109,7 @@ def visualize_training_results(history):
     loss = history.history['loss']
     val_loss = history.history['val_loss']
 
-    epochs_range = range(2)
+    epochs_range = range(len(acc))
 
     plt.figure(figsize=(8, 8))
     plt.subplot(1, 2, 1)
@@ -124,27 +126,33 @@ def visualize_training_results(history):
     plt.show()
 
     
-#create_dataset()
-train_generator, val_generator, test_generator = fetch_data()
-model = build_model()
 
-epochs = 10
-steps_per_epoch = train_generator.samples // train_generator.batch_size
-validation_steps = val_generator.samples // val_generator.batch_size
+def main() -> None:
+    #create_dataset()
+    train_generator, val_generator, test_generator = fetch_data()
+    model = build_model()
 
-history = model.fit(
-    train_generator,
-    steps_per_epoch=steps_per_epoch,
-    epochs=epochs,
-    validation_data=val_generator,
-    validation_steps=validation_steps
-)
+    epochs = 50
+    steps_per_epoch = train_generator.samples // train_generator.batch_size
+    validation_steps = val_generator.samples // val_generator.batch_size
 
-visualize_training_results(history)
+    history = model.fit(
+        train_generator,
+        steps_per_epoch=steps_per_epoch,
+        epochs=epochs,
+        validation_data=val_generator,
+        validation_steps=validation_steps
+    )
 
-test_loss, test_acc = model.evaluate(test_generator)
-print(f"Precisión en el conjunto de testeo: {test_acc * 100:.2f}%")
+    visualize_training_results(history)
 
-model.evaluate(val_generator)
+    test_loss, test_acc = model.evaluate(test_generator)
+    print(f"Precisión en el conjunto de testeo: {test_acc * 100:.2f}%")
 
-model.save('model.h5')
+    model.evaluate(val_generator)
+
+    model.save('model.h5')
+
+
+if __name__ == '__main__':
+    main()
