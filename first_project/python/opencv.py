@@ -1,51 +1,46 @@
 import tensorflow as tf
 import cv2
 import numpy as np
+import time
 
 # Load the model
 model = tf.keras.models.load_model('model.h5')
+class_names = ['fist', 'palm']
+last_prediction_time = time.time()
 
 # Start video capture
-cap = cv2.VideoCapture(0)
+camera = cv2.VideoCapture(0)
 
 while True:
-    # Capture frame-by-frame
-    ret, image = cap.read()
-    
-    if not ret:
-        print("Failed to grab frame")
-        break
-    
-    # Display the image with OpenCV
-    cv2.imshow('Image', image)
+    ret, image = camera.read()
+    image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_AREA)
 
-    # Resize the image to the input size of the model
-    image_resized = cv2.resize(image, (224, 224))
+    cv2.imshow("Webcam Image", image)
 
-    # Convert the image to a numpy array and normalize it
-    image_array = np.array(image_resized) // 255.0
+    if time.time() - last_prediction_time >= 1:  # Predict every 2 seconds
+        
+        image_input = np.asarray(image, dtype=np.float32).reshape(1, 224, 224, 3)
+        image_input = (image_input / 127.5) - 1
 
-    # Add an extra dimension to match the input shape (batch_size, height, width, channels)
-    image_array = np.expand_dims(image_array, axis=0)
+        prediction = model.predict(image_input)
+        confidence_score = prediction[0][0]
 
-    # Make predictions
-    predictions = model.predict(image_array)
-    
-    # For binary classification, apply a sigmoid to get probabilities
-    probability = tf.nn.sigmoid(predictions[0])
-    print(f"Prediction: {probability.numpy()}")
+        print("Predicted Class: ",
+              "Palm" 
+              if confidence_score>0.9
+              else "Fist")
 
-    # Determine class based on a threshold
-    if probability > 0.5:
-        print("Class: 1")
-    else:
-        print("Class: 0")
+        print("Confidence Score:", str(np.round(confidence_score * 100)
+                                       if confidence_score >= 0.9
+                                       else np.round((1 - confidence_score) * 100)))
+
+        last_prediction_time = time.time()
 
     # Check for 'Esc' key press to exit
     if cv2.waitKey(1) == 27:  # 27 is the ASCII code for the 'Esc' key
         break
 
 # When everything is done, release the capture
-cap.release()
+camera.release()
 cv2.destroyAllWindows()
 

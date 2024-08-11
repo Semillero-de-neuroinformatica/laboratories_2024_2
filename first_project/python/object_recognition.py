@@ -6,6 +6,8 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import regularizers
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
@@ -47,7 +49,9 @@ def fetch_data():
 	    horizontal_flip=True,
 	    fill_mode='nearest',
         brightness_range=[0.8, 1.2],
-        channel_shift_range=0.2
+        channel_shift_range=0.2,
+        vertical_flip=True,
+        validation_split=0.2,
 	)
 
     val_datagen = ImageDataGenerator(rescale=1./255)
@@ -56,21 +60,21 @@ def fetch_data():
     train_generator = train_datagen.flow_from_directory(
 	    TRAIN_DIR,
 	    target_size=(224, 224),
-	    batch_size=32,
+	    batch_size=8,
 	    class_mode='binary'
 	)
 	
     val_generator = val_datagen.flow_from_directory(
 	    VAL_DIR,
 	    target_size=(224, 224),
-	    batch_size=32,
+	    batch_size=8,
 	    class_mode='binary'
 	)
 
     test_generator = test_datagen.flow_from_directory(
             TEST_DIR,
             target_size=(224, 224),
-            batch_size=32,
+            batch_size=8,
             class_mode='binary'
     )
 
@@ -79,23 +83,23 @@ def fetch_data():
 def build_model():
 
     model = models.Sequential([
-        layers.Rescaling(1./255, input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-        layers.Conv2D(32, 3, padding='same', activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Conv2D(64, 3, padding='same', activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Conv2D(128,3, padding='same', activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Conv2D(256, 3, padding='same', activation='relu'),
-        layers.MaxPooling2D(),
+        layers.Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
+        layers.Conv2D(32, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
+
+        layers.Conv2D(16, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Conv2D(16, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Conv2D(32, (3, 3), activation='relu', kernel_regularizer=regularizers.l2(0.01)),
+       
         layers.Flatten(),
-        layers.Dense(256, activation='relu'),
-        layers.Dropout(0.5),
+        layers.Dropout(0.6),
+        layers.Dense(64, activation='relu'),
         layers.Dense(1, activation='sigmoid')
     ])
 
     model.compile(optimizer='adam',
-                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+                  loss='binary_crossentropy',
                   metrics=['accuracy'])
 
     model.summary()
@@ -128,20 +132,20 @@ def visualize_training_results(history):
     
 
 def main() -> None:
+    
     #create_dataset()
     train_generator, val_generator, test_generator = fetch_data()
     model = build_model()
 
-    epochs = 50
-    steps_per_epoch = train_generator.samples // train_generator.batch_size
-    validation_steps = val_generator.samples // val_generator.batch_size
+    lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
+
 
     history = model.fit(
         train_generator,
-        steps_per_epoch=steps_per_epoch,
-        epochs=epochs,
+        epochs=20,
         validation_data=val_generator,
-        validation_steps=validation_steps
+        callbacks=[lr_scheduler, early_stopping]
     )
 
     visualize_training_results(history)
