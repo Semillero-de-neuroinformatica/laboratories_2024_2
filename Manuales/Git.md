@@ -111,6 +111,10 @@ git push <alias> <branch>
 ```warp-runnable-command
 git pull <alias> <branch>
 ```
+> **Nota Importante:**
+es recomendable utilizar un archivo .gitignore para evitar que se envíen archivos no deseados al repositorio remoto.
+este es un recurso muy util que genera este archivo de forma automatica:
+[Crear .gitignore](https://www.toptal.com/developers/gitignore)
 ## Seguimiento de Cambios de Rutas \(Tracking Path Changes\)
 * `git rm [file]`\: Elimina el archivo del proyecto y lo coloca en la etapa para el commit\.
 ```warp-runnable-command
